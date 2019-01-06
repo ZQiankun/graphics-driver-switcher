@@ -1,0 +1,75 @@
+#!/bin/bash
+
+DRIVER_PATH="/opt/drivers"
+
+GRAPHICS_AMD="1002"
+#GRAPHICS_NV="10de"
+GRAPHICS_VIA="1106"
+
+
+GRAPHICS_AMD_FLAG="/etc/X11/.amd.flag"
+#GRAPHICS_NV_FLAG="/etc/X11/.nv.flag"
+GRAPHICS_VIA_FLAG="/etc/X11/.via.flag"
+
+GRAPHICS_TYPE=$(lspci -nn |grep VGA |grep -o "[A-Za-z0-9]\{4\}:[A-Za-z0-9]\{4\}" |awk -F ":" '{print $1}')
+
+
+amd_driver_install()
+{
+	echo "amd driver install"
+	rpm -Uvh $DRIVER_PATH/kmod-catalyst-15.302-1.nd7.zx.2.x86_64.rpm --force --nodeps
+	rpm -Uvh $DRIVER_PATH/kmod-catalyst-`uname -r`-15.302-1.nd7.zx.2.x86_64.rpm --force --nodeps
+	rpm -Uvh $DRIVER_PATH/xorg-x11-drv-catalyst-15.302-1.nd7.zx.2.x86_64.rpm --force --nodeps
+	rpm -Uvh $DRIVER_PATH/xorg-x11-drv-catalyst-libs-15.302-1.nd7.zx.2.x86_64.rpm --force --nodeps
+	rpm -Uvh $DRIVER_PATH/xorg-x11-drv-catalyst-devel-15.302-1.nd7.zx.2.x86_64.rpm --force --nodeps
+	depmod -a
+}
+
+via_driver_install()
+{
+	echo "via driver install"
+	rpm -Uvh $DRIVER_PATH/s3-linux-graphics-driver-*.x86_64.rpm --force --nodeps
+	depmod -a
+}
+
+graphics_driver_cleanup()
+{
+	echo "cleanup"
+	rm -f $GRAPHICS_AMD_FLAG
+	#rm -f $GRAPHICS_NV_FLAG
+	rm -f $GRAPHICS_VIA_FLAG
+
+	rpm -e kmod-catalyst --nodeps 
+	#rpm -e kmod-catalyst-3.10.52-200.nd7.1.zx.1.x86_64 --nodeps 
+	rpm -qa | grep kmod-catalyst-3.10.52 |xargs rpm -e --nodeps
+	rpm -e xorg-x11-drv-catalyst --nodeps 
+	rpm -e xorg-x11-drv-catalyst-libs --nodeps 
+	rpm -e xorg-x11-drv-catalyst-devel --nodeps 
+
+	rpm -e s3-linux-graphics-driver --nodeps 
+
+	# recover default open source drivers
+}
+
+if [[ $GRAPHICS_TYPE =~ $GRAPHICS_VIA ]]; then
+	echo "probe via"
+	if [ ! -e $GRAPHICS_VIA_FLAG ]; then
+		graphics_driver_cleanup
+		via_driver_install
+		touch $GRAPHICS_VIA_FLAG
+	fi
+elif [[ $GRAPHICS_TYPE =~ $GRAPHICS_AMD ]]; then
+	echo "probe amd"
+	if [ ! -e $GRAPHICS_AMD_FLAG ]; then
+		graphics_driver_cleanup
+		amd_driver_install
+		touch $GRAPHICS_AMD_FLAG
+	fi
+else
+	echo "probe others"
+	if [ -e $GRAPHICS_AMD_FLAG -o -e $GRAPHICS_VIA_FLAG ]; then
+		graphics_driver_cleanup
+	fi
+fi
+
+
